@@ -1,19 +1,6 @@
-"""
-Validates iter_naive (SingleRunner) and iter_padded (PaddedRunner) against
-the no_batch oracle, on the same "hitchhiker" trace used for orca in
-test_orca_v1.py -- a request that arrives mid-run and must be admitted into
-an already-in-flight iteration (§3 C2 case 3: the batch that results mixes
-an INITIATION request with INCREMENT requests). Both ablations share
-IterationLevelScheduler with orca; the only thing under test here is that
-swapping FlatRunner for SingleRunner or PaddedRunner doesn't change *what*
-gets generated, only how it's computed.
-
-Also re-confirms the §4.2 deadlock demo generalizes: since iter_naive and
-iter_padded use the identical scheduler class as orca, the same
-reserve=True/False contrast should reproduce for both, with zero new code.
-"""
 from __future__ import annotations
 
+import _path   # noqa: F401 -- sys.path bootstrap for direct python3 invocation
 import engines  # noqa: F401
 from driver import ENGINES, VirtualClock, run
 from metrics import report
@@ -50,8 +37,7 @@ def check_engine(lm, engine_name: str, ids_oracle: dict) -> None:
     assert rep["pad_token_slots"] == 0, f"{engine_name}: pad_token_slots should be 0"
     assert rep["finished_token_slots"] == 0, f"{engine_name}: finished_token_slots should be 0"
 
-    # confirm the batch really did mix phases at some point -- otherwise
-    # this test isn't exercising case 3 at all.
+
     mixed = any(it.n_initiation > 0 and it.n_increment > 0 for it in mc.iterations)
     print(f"  zero pad/finished waste: OK.  mixed-phase iteration occurred: {mixed}")
     assert mixed, f"{engine_name}: trace never actually produced a mixed-phase batch"

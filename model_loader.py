@@ -1,5 +1,3 @@
-"""One loader for every engine. If dtype or attn impl drifts between
-engines, throughput deltas stop meaning anything."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -26,7 +24,7 @@ def select_device_and_dtype(force_fp32: bool = False,
         return dev, torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
     if dev.type == "mps":
         return dev, torch.float16
-    return dev, torch.float32          # CPU fp16 is slow and badly supported
+    return dev, torch.float32         
 
 
 @dataclass
@@ -36,7 +34,7 @@ class LoadedModel:
     device: torch.device
     dtype: torch.dtype
     eos_id: int
-    # cached config, needed by the selective-batching forward
+
     n_layers: int
     n_heads: int
     n_kv_heads: int
@@ -46,11 +44,9 @@ class LoadedModel:
 
     @property
     def n_rep(self) -> int:
-        """GQA repeat factor for repeat_kv."""
         return self.n_heads // self.n_kv_heads
 
     def bytes_per_slot(self) -> int:
-        """One K/V "slot" (§4.2) = K and V for one token, all layers."""
         return 2 * self.n_layers * self.n_kv_heads * self.head_dim * self.dtype.itemsize
 
 
@@ -60,8 +56,6 @@ def load_model_and_tokenizer(model_id: str = "Qwen/Qwen2.5-0.5B",
                              attn_implementation: str = "sdpa",
                              deterministic: bool = True) -> LoadedModel:
     if deterministic:
-        # TF32 changes matmul reduction order; leaving it on makes
-        # cross-engine logit comparison flaky for no benefit here.
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
         torch.manual_seed(0)

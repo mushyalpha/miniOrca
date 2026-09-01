@@ -11,11 +11,8 @@ class Phase(Enum):
 
 
 class State(Enum):
-    """Algorithm 1's req.state. The paper overloads one field with
-    {INITIATION, INCREMENT, RUNNING}; we split phase/state and treat
-    `state != RUNNING` (Alg 1 line 19) as `is_selectable`."""
-    WAITING = "waiting"      # in pool, not currently in flight
-    RUNNING = "running"      # iteration in flight (matters once pipelined)
+    WAITING = "waiting"      
+    RUNNING = "running"     
     DONE = "done"
 
 
@@ -23,26 +20,21 @@ class State(Enum):
 class RequestState:
     rid: int
     prompt_ids: list[int]
-    max_gen_tokens: int          # §6: forced; the model never emits EOS
+    max_gen_tokens: int         
     arrival_time: float
 
     phase: Phase = Phase.INITIATION
     state: State = State.WAITING
     generated_ids: list[int] = field(default_factory=list)
 
-    # Attention K/V manager bookkeeping (§3, §4.2). kv_len is how many
-    # tokens are actually materialized; max_tokens is what we *reserved*.
     kv_len: int = 0
-    kv_cache: object = None      # engine-defined; per-request, never global
+    kv_cache: object = None     
 
-    # Timestamps. completion_time != return_time is the whole of C1:
-    # static batching generates the last token, then holds the response
-    # until every row in the batch drains.
     first_token_time: Optional[float] = None
     completion_time: Optional[float] = None
     return_time: Optional[float] = None
 
-    n_iterations: int = 0        # for the iteration-level FCFS check (§4.2)
+    n_iterations: int = 0       
 
     @property
     def n_input_tokens(self) -> int:
@@ -50,8 +42,6 @@ class RequestState:
 
     @property
     def max_tokens(self) -> int:
-        """§4.2 fn.6: n_input_tokens + max_gen_tokens. The number of K/V
-        slots reserved at admission, so growth can never fail mid-flight."""
         return self.n_input_tokens + self.max_gen_tokens
 
     @property
@@ -67,8 +57,6 @@ class RequestState:
         return self.state != State.RUNNING and not self.is_finished
 
     def tokens_this_iter(self) -> list[int]:
-        """What the engine must feed this request in the next iteration.
-        Prompt in bulk for INITIATION, last token only for INCREMENT."""
         if self.phase is Phase.INITIATION:
             return list(self.prompt_ids)
         return [self.generated_ids[-1]]
@@ -79,12 +67,11 @@ class RequestState:
 
     @property
     def position_offset(self) -> int:
-        """RoPE start position for this iteration's tokens."""
+
         return self.kv_len
 
     def append_token(self, token_id: int, now: float) -> None:
-        """EOS is deliberately ignored (§6): forcing max_gen_tokens keeps
-        token counts deterministic across engines and traces replayable."""
+
         if self.first_token_time is None:
             self.first_token_time = now
         self.generated_ids.append(token_id)
@@ -95,7 +82,6 @@ class RequestState:
             self.completion_time = now
             self.state = State.DONE
 
-    # --- convenience -------------------------------------------------
     @property
     def latency(self) -> float:
         assert self.return_time is not None
@@ -103,7 +89,6 @@ class RequestState:
 
     @property
     def normalized_latency(self) -> float:
-        """Figure 10's y-axis: latency / number of generated tokens."""
         return self.latency / max(1, self.n_generated)
 
     @property
@@ -113,5 +98,4 @@ class RequestState:
 
     @property
     def hold_after_completion(self) -> float:
-        """Time spent finished-but-not-returned. ~0 for Orca, large for static."""
         return self.return_time - self.completion_time

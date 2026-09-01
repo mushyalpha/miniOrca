@@ -1,13 +1,3 @@
-"""Workload synthesis, §6: 'we synthesize a trace of client requests
-because there is no publicly-available request trace'.
-
-  n_input_tokens  ~ U(32, 512)      (§6.2)
-  max_gen_tokens  ~ U(1, 128)       (§6.2)
-  arrival times   ~ Poisson process (§6)
-  EOS is never emitted; every request runs exactly max_gen_tokens iters.
-
-Generate once, save to JSON, replay into every engine.
-"""
 from __future__ import annotations
 
 import argparse
@@ -64,8 +54,6 @@ class Trace:
 
     @property
     def total_slots(self) -> int:
-        """Sum of max_tokens — the n_slots value at which reservation
-        never blocks. Set n_slots below this to exercise Alg 1 line 25."""
         return sum(r.max_tokens for r in self.requests)
 
 
@@ -73,11 +61,10 @@ def generate_poisson_trace(num_requests: int, arrival_rate: float, seed: int = 0
                            input_len_range: tuple[int, int] = (32, 512),
                            output_len_range: tuple[int, int] = (1, 128),
                            homogeneous: Optional[tuple[int, int]] = None) -> Trace:
-    """homogeneous=(in_len, gen_len) reproduces Figure 11's control trace,
-    where no request finishes early and static batching stops looking bad."""
+
     rng = np.random.default_rng(seed)
     gaps = rng.exponential(1.0 / arrival_rate, size=num_requests)
-    arrivals = np.cumsum(gaps) - gaps[0]          # first request at t=0
+    arrivals = np.cumsum(gaps) - gaps[0]          
     reqs = []
     for i in range(num_requests):
         if homogeneous is not None:

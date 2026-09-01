@@ -1,21 +1,6 @@
-"""§3 C2 case 3: "each request is in the different phase: initiation or
-increment." A batch containing both an INITIATION and an INCREMENT request
-must run in ONE forward, not two -- that's the case static batching cannot
-represent at all, and the case nano-vllm-style "schedule prefills XOR
-decodes" schedulers deliberately avoid. It's a core claim of the paper, and
-`select()` mixing them is more faithful than schedulers that don't.
-
-This is a standing guard, not a one-off check: `selective_batching.validate()`
-and `test_selective_tiny.py` already assert this for a hand-built batch, but
-that's only a guarantee about the *runner* accepting a mixed batch if handed
-one. This test guarantees the *scheduler* actually produces one during a
-real run -- so if a future change (e.g. teaching a runner to reject mixed
-batches, or "simplifying" select() to schedule phases separately) quietly
-reintroduces the split, this fails immediately instead of only showing up
-as a subtle throughput regression three files away.
-"""
 from __future__ import annotations
 
+import _path   # noqa: F401 -- sys.path bootstrap for direct python3 invocation
 import engines  # noqa: F401
 from driver import ENGINES, VirtualClock, run
 from test_selective_tiny import make_tiny_lm

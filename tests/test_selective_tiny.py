@@ -1,19 +1,6 @@
-"""
-Runs selective_batching.validate()'s exact logic against a tiny, randomly
-initialized Qwen2 model instead of the real Qwen2.5-0.5B download (which is
-network-blocked right now). This is a legitimate substitute for *this*
-check specifically: the thing being verified is that the flatten -> per-
-token linear ops -> split -> per-request SDPA -> merge dataflow reproduces
-HF's own dense forward. That is a property of the tensor plumbing (shapes,
-RoPE position_ids, GQA repeat_kv, cu_seqlens bookkeeping), not of the
-weight values, so a tiny random model exercises the identical code path.
-
-Once the real download unblocks, run `python selective_batching.py`
-directly against Qwen2.5-0.5B as the final confirmation -- same code, real
-weights, real vocab/hidden sizes.
-"""
 from __future__ import annotations
 
+import _path  
 import torch
 from transformers import Qwen2Config, Qwen2ForCausalLM
 
@@ -70,8 +57,6 @@ def validate(lm: LoadedModel) -> None:
               f"argmax {'OK' if got[i].argmax() == ref[i].argmax() else 'MISMATCH'}")
         assert d < 1e-3, "flat forward diverges from HF"
 
-    # And now a mixed batch: one prefill + one decode, the case that is
-    # impossible to batch without selective batching (§3 C2, case 3).
     for r in reqs:
         r.append_token(int(got[reqs.index(r)].argmax()), 0.0)
     reqs.append(RequestState(rid=99, prompt_ids=[7, 8, 9], max_gen_tokens=4,
@@ -82,9 +67,7 @@ def validate(lm: LoadedModel) -> None:
     assert out.shape == (3, lm.vocab_size)
     print("  mixed initiation+increment batch OK", out.shape)
 
-    # A third case straight out of §3 C2: three simultaneous decodes (all
-    # q_len == 1), which static batching *can* do but is worth covering here
-    # since is_causal=(e-s>1) takes the other branch for every row.
+
     for r in reqs:
         r.append_token(0, 0.0)
     out2 = selective_batching_forward(lm, reqs, kv)

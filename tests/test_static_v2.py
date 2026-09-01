@@ -1,17 +1,6 @@
-"""
-Validates the left-padded StaticBatchingEngine against your own checklist:
-  1. Correctness: batch of different-length prompts must match the
-     no_batch oracle exactly, greedy, fp32 CPU, tiny random Qwen2 (same
-     modeling_qwen2 code path as Qwen2.5-0.5B, no network needed).
-  2. Waste shape: with realistic length ranges, pad_tokens and
-     finished_tokens should both be substantial, not near zero.
-Absolute-magnitude checks (hold_after_completion in seconds, not ms) need
-the real model's real per-iteration latency and are checked separately in
-test_static_real.py against actual Qwen2.5-0.5B, since a tiny random model
-runs iterations in microseconds regardless of scheduling correctness.
-"""
 from __future__ import annotations
 
+import _path   # noqa: F401 -- sys.path bootstrap for direct python3 invocation
 import random
 
 import torch
@@ -49,8 +38,6 @@ def make_tiny_lm() -> LoadedModel:
         hidden_size=cfg.hidden_size, vocab_size=cfg.vocab_size,
     )
 
-
-# ------------------------------------------------------------- check 1
 def check_correctness(lm: LoadedModel) -> None:
     print("=== check 1: left-padding correctness vs no_batch oracle ===")
     lens = [5, 12, 40]
@@ -82,7 +69,7 @@ def check_correctness(lm: LoadedModel) -> None:
     print("  PASS: all rows match under left-padding + explicit position_ids.\n")
 
 
-# ------------------------------------------------------------- check 2
+
 def check_waste_shape(lm: LoadedModel) -> None:
     print("=== check 2: waste shape at realistic length ranges ===")
     rng = random.Random(0)

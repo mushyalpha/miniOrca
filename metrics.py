@@ -1,6 +1,3 @@
-"""One report() for every engine. The waste counters are the point:
-they turn 'Orca is faster' into 'Orca stopped doing this specific work'
-(Figure 3's '-' entries)."""
 from __future__ import annotations
 
 import json
@@ -13,17 +10,16 @@ from request import Phase, RequestState
 
 @dataclass
 class IterationRecord:
-    """One invocation of the model forward, whatever the engine."""
     index: int
     start: float
     end: float
-    batch_size: int                 # requests in the batch
-    useful_tokens: int = 0          # token slots doing real work
-    pad_tokens: int = 0             # padding to the longest row (static only)
-    finished_tokens: int = 0        # rows already done but still computed (C1)
+    batch_size: int                 
+    useful_tokens: int = 0          
+    pad_tokens: int = 0            
+    finished_tokens: int = 0        
     n_initiation: int = 0
     n_increment: int = 0
-    kv_slots_used: int = 0          # n_rsrv, for the n_slots experiment
+    kv_slots_used: int = 0          
 
     @property
     def duration(self) -> float:
@@ -60,7 +56,7 @@ def report(mc: MetricsCollector, label: str = "", verbose: bool = True) -> dict:
     assert reqs, "no returned requests"
 
     lat = [r.latency for r in reqs]
-    nlat = [r.normalized_latency for r in reqs]          # Figure 10's metric
+    nlat = [r.normalized_latency for r in reqs]       
     queue = [r.queue_delay for r in reqs]
     hold = [r.hold_after_completion for r in reqs]
 
@@ -123,20 +119,6 @@ def _print(d: dict) -> None:
 
 
 def check_iteration_fcfs(reqs: list[RequestState]) -> None:
-    """§4.2's invariant: for any pair (x_i, x_j) STILL COMPETING for
-    scheduling, if x_i arrived earlier then x_i must have run the same or
-    more iterations. Cheap, and catches scheduler bugs (e.g. a `continue`
-    instead of `break` in Select admitting a later arrival ahead of an
-    earlier one) that a throughput number would hide.
-
-    Finished requests are excluded from the comparison. The invariant is
-    about scheduling PRIORITY among requests that still need work; a
-    request that has already generated all its tokens isn't being
-    starved by falling behind an active one that simply needs more
-    tokens (Figure 3's x2 finishing before x1 is exactly this, and is
-    correct behavior, not a violation) -- this would false-fire even on
-    a correct Orca implementation without this filter.
-    """
     active = [r for r in reqs if not r.is_finished]
     s = sorted(active, key=lambda r: r.arrival_time)
     for a, b in zip(s, s[1:]):

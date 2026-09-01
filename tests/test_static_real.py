@@ -1,14 +1,3 @@
-"""
-Check 3 from your list: hold_after_completion_p50 should be SECONDS, not
-milliseconds, against the real Qwen2.5-0.5B. Needs real per-iteration
-latency, which the tiny random model in test_static_v2.py can't provide
-(its iterations run in microseconds regardless of scheduling correctness).
-
-Design: one batch, max_bs = all of them, so nothing straddles two closed
-batches. One request finishes almost immediately (max_gen=1); the rest
-run much longer. That request's hold time is real_iter_ms * (~n-1 held
-iterations), which should land clearly in the seconds range on CPU.
-"""
 from __future__ import annotations
 
 import time

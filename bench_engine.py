@@ -1,29 +1,3 @@
-"""§6.1-style microbenchmark: isolates a Runner's per-iteration cost from
-scheduling entirely. No driver, no admission, no arrivals -- fix a
-homogeneous, all-decode-phase batch of N requests up front (one INITIATION
-call to get every request into steady state), then time `runner.run(batch)`
-alone, repeated, across batch sizes.
-
-This deliberately measures decode-phase steady state only. Prefill cost at
-these sequence lengths would dominate and drown out the per-iteration
-signal this exists to isolate; end-to-end prefill+decode cost is what
-run_experiments.py's full traces are for.
-
-What this can tell you that a full run can't: PaddedRunner does two things
-FlatRunner doesn't -- pads every row out to the batch's longest new-token
-count (irrelevant here, all rows contribute exactly 1 token) and reassembles
-per-request K/V into a dense tensor every call (a real O(B x L) copy, and
-the whole reason this benchmark exists). SingleRunner does neither, but
-also shares no compute across requests at all. Comparing all three across
-batch size should show FlatRunner's ms/iteration growing sub-linearly with
-B (shared kernel launch), SingleRunner's growing ~linearly (no sharing),
-and PaddedRunner's growing faster than FlatRunner's as L grows (the copy
-cost) even though both share the batched-GEMM benefit at a fixed L.
-
-Usage:
-    python bench_engine.py --tiny                     # offline, structural
-    python bench_engine.py --model Qwen/Qwen2.5-0.5B   # real weights
-"""
 from __future__ import annotations
 
 import argparse
@@ -65,9 +39,9 @@ def bench_one(runner_name: str, lm: LoadedModel, batch_size: int, prompt_len: in
 
     for r in reqs:
         runner.alloc(r, capacity=r.max_tokens)
-    _step(runner, reqs)                     # INITIATION -- excluded from timing
+    _step(runner, reqs)                    
     for _ in range(warmup):
-        _step(runner, reqs)                 # let any lazy init / cache warm-up settle
+        _step(runner, reqs)                
 
     if lm.device.type == "mps":
         torch.mps.synchronize()
@@ -118,7 +92,7 @@ def main() -> None:
     rows = []
     for bs in a.batch_sizes:
         if "single" in a.runners and bs > 8 and a.tiny is False:
-            pass  # single scales ~linearly; still fine to run, just slow -- caller's choice
+            pass 
         times = {}
         for name in a.runners:
             ms = bench_one(name, lm, bs, a.prompt_len, a.n_iters, a.warmup, a.seed)

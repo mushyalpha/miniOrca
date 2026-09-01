@@ -1,38 +1,17 @@
-"""
-End-to-end validation before trusting anything: run the SAME trace through
-no_batch (the correctness oracle) and static (the padded, position_ids-
-corrected baseline) via the shared driver, and assert identical
-generated_ids. Uses a tiny randomly-initialized Qwen2 (no network,
-same modeling_qwen2 code path Qwen2.5-0.5B uses) so this runs in
-milliseconds. VirtualClock keeps it fast and deterministic.
-
-Trace is deliberately adversarial for both claims under test:
-  - req0/1/2 arrive simultaneously with DIFFERENT input lengths
-    (6/11/4 tokens) -- exercises the position_ids fix for mixed-length
-    prefill in one static batch.
-  - req0/1/2 have DIFFERENT max_gen_tokens (5/2/8) -- forces req1 to
-    finish early and sit as Figure 3 waste (finished_tokens) while req0
-    and req2 keep running, and forces the batch's return to be held
-    until req2 (the slowest) finishes -- C1's hold_after_completion.
-  - req3 arrives much later, alone -- a clean late-joiner case for
-    no_batch's queueing behavior.
-"""
 from __future__ import annotations
 
+import _path 
 import torch
 from transformers import Qwen2Config, Qwen2ForCausalLM
 
-import engines  # noqa: F401  -- populates driver.ENGINES
+import engines 
 from driver import ENGINES, VirtualClock, run
 from metrics import check_iteration_fcfs, report
 from model_loader import LoadedModel
 from trace import Trace, TraceRequest, materialize_prompts
 
 torch.manual_seed(0)
-# materialize_prompts() samples ids from [1000, vocab_size) -- needs a vocab
-# comfortably above 1000 for that range to be non-empty. Real tokenizers
-# (~150k vocab) never hit this; noting it as a fragility in the hardcoded
-# constant for small/toy vocabs, not fixing it since it's their file.
+
 VOCAB = 2000
 
 
@@ -83,7 +62,6 @@ def main() -> None:
     mc_static = run(static, trace, clock=VirtualClock(), check_fcfs=True)
     rep_static = report(mc_static, label="static (max_bs=4)")
 
-    # --- the actual correctness oracle check ---
     ids_nb = {r.rid: r.generated_ids for r in mc_nb.returned}
     ids_static = {r.rid: r.generated_ids for r in mc_static.returned}
 
@@ -97,7 +75,6 @@ def main() -> None:
     assert all_match, "static batching diverged from the no-batch oracle"
     print("All requests match -- padding + explicit position_ids are correct.")
 
-    # --- Figure 3's story, made concrete ---
     print("\n--- C1, made concrete (static engine) ---")
     for r in sorted(mc_static.returned, key=lambda r: r.rid):
         print(f"  req {r.rid}: completed at t={r.completion_time:.6f}, "

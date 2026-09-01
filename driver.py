@@ -1,6 +1,3 @@
-"""Shared outer loop: arrivals, clock, metrics. Engines differ only in
-step(). Without this, every engine reimplements 'has this arrived yet'
-and you get the same drift you avoided in the model forward."""
 from __future__ import annotations
 
 import argparse
@@ -13,18 +10,8 @@ from metrics import IterationRecord, MetricsCollector, check_iteration_fcfs, rep
 from request import RequestState, State
 from trace import Trace
 
-# Every engine module does `from driver import ENGINES`. If this file is run
-# directly (`python3 driver.py ...`), it executes as `__main__`, which is a
-# *different* module object than "driver" -- so those imports would trigger
-# a second, fresh execution of this whole file, with its own separate
-# ENGINES dict (and its own separate IterationRecord/RequestState-adjacent
-# classes) that main()'s own globals never see populated. Registering this
-# module under its real name up front makes "import driver" and running
-# this file directly resolve to the *same* module object either way.
 sys.modules.setdefault("driver", sys.modules[__name__])
 
-
-# ---------------------------------------------------------------- clocks
 class Clock(Protocol):
     def now(self) -> float: ...
     def advance_to(self, t: float) -> None: ...
@@ -33,8 +20,7 @@ class Clock(Protocol):
 
 @dataclass
 class WallClock:
-    """Honest: real elapsed time. `speedup > 1` compresses arrivals,
-    i.e. raises offered load without regenerating the trace."""
+
     speedup: float = 1.0
     _t0: float = field(default_factory=time.perf_counter)
 
@@ -52,10 +38,7 @@ class WallClock:
 
 @dataclass
 class VirtualClock:
-    """Reproducible: trace time advances only by measured model time, so
-    idle gaps cost nothing and results don't depend on how long you sat
-    in Python. Throughput is still real (it's real GPU seconds), but the
-    system never idles, so treat it as a saturated-load measurement."""
+
     t: float = 0.0
 
     def now(self) -> float:
@@ -68,7 +51,6 @@ class VirtualClock:
         self.t += wall_seconds
 
 
-# --------------------------------------------------------------- engines
 @dataclass
 class IterationResult:
     record: IterationRecord
@@ -77,17 +59,12 @@ class IterationResult:
 
 @runtime_checkable
 class Engine(Protocol):
-    """Every engine owns `pool` (Figure 4's request pool). The driver only
-    inserts arrivals — Algorithm 1's 'concurrent threads inserting newly
-    arrived requests'. The engine removes finished requests and reports
-    which ones it is returning to the client *now*."""
     pool: list[RequestState]
 
     def has_work(self) -> bool: ...
     def step(self, now: float, iter_index: int) -> IterationResult: ...
 
 
-# ---------------------------------------------------------------- driver
 def run(engine: Engine, trace: Trace, clock: Optional[Clock] = None,
         max_iterations: int = 1_000_000, check_fcfs: bool = False,
         progress_every: int = 0) -> MetricsCollector:
@@ -99,19 +76,16 @@ def run(engine: Engine, trace: Trace, clock: Optional[Clock] = None,
     while pending or engine.has_work():
         now = clock.now()
 
-        # 1. admit arrivals (§3 S1: a new request gets its chance after the
-        #    currently scheduled iteration, not after the current batch)
+
         while pending and pending[0].arrival_time <= now:
             engine.pool.append(pending.pop(0))
 
-        # 2. nothing runnable -> skip to the next arrival
         if not engine.has_work():
             if not pending:
                 break
             clock.advance_to(pending[0].arrival_time)
             continue
 
-        # 3. one iteration
         t0 = time.perf_counter()
         result = engine.step(now, i)
         wall = time.perf_counter() - t0
@@ -119,8 +93,6 @@ def run(engine: Engine, trace: Trace, clock: Optional[Clock] = None,
         result.record.start, result.record.end = now, clock.now()
         mc.record_iteration(result.record)
 
-        # 4. returns. The engine decides *when* a finished request is
-        #    released; that gap is C1's latency penalty for static.
         for req in result.returned:
             req.return_time = clock.now()
             req.state = State.DONE
@@ -143,13 +115,12 @@ def run(engine: Engine, trace: Trace, clock: Optional[Clock] = None,
     return mc
 
 
-# ------------------------------------------------------------------ CLI
-ENGINES = {}   # name -> factory(loaded_model, **kwargs); registered by each engine module
+ENGINES = {}  
 
 
 def main() -> None:
-    import engines  # noqa: F401  -- populates ENGINES; must happen before
-                     # the parser is built, or --engine choices is always None.
+    import engines 
+                     
     from config import Config
 
     p = argparse.ArgumentParser()

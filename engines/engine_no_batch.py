@@ -1,16 +1,3 @@
-"""
-Reference engine: strict single-flight, batch size always 1.
-
-This conforms to driver.Engine so it runs through the same outer loop as
-every other engine, and its output is the correctness oracle — any other
-engine's generated_ids must match this one exactly under greedy decoding
-for the same trace.
-
-Uses HF's own incremental cache directly (no flatten/split needed, since
-there's never more than one request in flight) — the model math here is
-untouched `model(...)`, only the outer loop differs from the other
-engines.
-"""
 from __future__ import annotations
 
 import torch

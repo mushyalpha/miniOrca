@@ -1,19 +1,3 @@
-"""One command, one model load, every engine, one clean comparison table.
-
-Built for *reporting* results (writeup/portfolio/social), not for iterating
-on the implementation -- see driver.py for running a single engine, and
-bench_engine.py for isolating a runner's per-iteration cost. This script
-just loads the model once (saves ~5 redundant weight loads) and runs the
-same trace through every requested engine back to back, so the numbers are
-guaranteed to be dtype-matched and trace-matched -- the two things that
-caused confusion earlier when engines were run one at a time across
-separate commands.
-
-Usage:
-    python run_all.py --trace t.json --fp32 --out results.json
-    python run_all.py --trace t.json --fp32 --engines orca static --max-bs 8
-    python run_all.py --tiny   # offline smoke test, no network/weights needed
-"""
 from __future__ import annotations
 
 import argparse
@@ -98,11 +82,6 @@ def main() -> None:
 
     n_slots = a.n_slots or trace.total_slots
     if a.tiny:
-        # static's default slot_policy="max_seq_len" charges a fixed 2048
-        # slots/request regardless of actual length (§6.1) -- a real trace's
-        # total_slots clears that easily, but the tiny smoke trace's short
-        # requests don't. Not a bug in the engine; just not what this
-        # smoke test is trying to exercise.
         n_slots = max(n_slots, a.max_bs * 2048)
     print(f"trace: {len(trace.requests)} requests, arrival_rate={trace.arrival_rate}, "
           f"total_slots={trace.total_slots}, n_slots(used)={n_slots}")

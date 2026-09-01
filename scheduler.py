@@ -1,9 +1,3 @@
-"""Algorithm 1 (§4.2): re-decides batch composition from scratch every
-iteration. Lives here exactly once -- orca, iter_naive, and iter_padded
-differ *only* in which Runner they hand the chosen batch to, never in how
-the batch is chosen. Owns admission policy and the K/V slot budget;
-storage is entirely the Runner's problem (`runner.alloc`/`runner.free`).
-"""
 from __future__ import annotations
 
 from driver import IterationResult
@@ -24,21 +18,15 @@ class IterationLevelScheduler:
         self.runner = runner
         self.max_bs = max_bs
         self.alloc = SlotAllocator(n_slots)
-        # 0 = unlimited. NOT in the paper; Orca bounds a batch by max_bs only.
-        # But an 8-request batch is 8 flat tokens when decoding and ~4000 when
-        # eight prompts prefill together, a 500x swing in iteration time that
-        # wrecks p99. Leave at 0 for a faithful run; set it to study the knob.
         self.max_batched_tokens = max_batched_tokens
-        # reserve=False is the "naive implementation" of §4.2 that deadlocks.
+
         self.reserve = reserve
-        # Algorithm 1 uses `break` (line 25), preserving iteration-level FCFS.
-        # `continue` would raise utilisation and allow starvation.
+
         self.fcfs_break = fcfs_break
 
         self.pool: list[RequestState] = []
-        self._reserved: dict[int, int] = {}   # rid -> slots charged, scheduler's own bookkeeping
+        self._reserved: dict[int, int] = {}  
 
-    # ------------------------------------------------------------ Engine API
     def has_work(self) -> bool:
         return bool(self.pool)
 
@@ -49,7 +37,7 @@ class IterationLevelScheduler:
             self._diagnose_empty_batch()
 
         for r in batch:
-            r.state = State.RUNNING                       # Alg 1 lines 6-7
+            r.state = State.RUNNING                       
 
         logits = self.runner.run(batch)
 
@@ -62,25 +50,21 @@ class IterationLevelScheduler:
             r.append_token(int(greedy[row]), now)         # flips phase to INCREMENT
             r.state = State.DONE if r.is_finished else State.WAITING
             if r.is_finished:
-                # §3 S1: "it can detect the completion of a request and
-                # immediately return its generated tokens to the client."
+
                 self._release(r)
                 returned.append(r)
 
         rec = IterationRecord(
             index=iter_index, start=now, end=now, batch_size=len(batch),
-            useful_tokens=n_tokens,      # all of them; nothing padded or dead
+            useful_tokens=n_tokens,     
             pad_tokens=0, finished_tokens=0,
             n_initiation=n_init, n_increment=len(batch) - n_init,
             kv_slots_used=self.alloc.used,
         )
         return IterationResult(record=rec, returned=returned)
 
-    # --------------------------------------------------- Algorithm 1: Select
+    #Algorithm 1: Select
     def select(self) -> list[RequestState]:
-        """Selects at most max_bs requests by arrival time, reserving K/V
-        space (via the Runner) for any request scheduled for the first
-        time."""
         batch: list[RequestState] = []
         n_tokens = 0
         candidates = sorted((r for r in self.pool if r.is_selectable),
@@ -103,8 +87,8 @@ class IterationLevelScheduler:
                 self.runner.alloc(req, capacity=req.max_tokens if self.reserve else None)
                 self._reserved[req.rid] = need
             elif not self.reserve:
-                # The naive path: an in-flight request must find room for the
-                # next token's K/V *now*. This is what §4.2 warns about.
+
+
                 if not self._charge(req, 1):
                     if self.fcfs_break:
                         break
@@ -123,7 +107,7 @@ class IterationLevelScheduler:
             return False
 
     def _release(self, req: RequestState) -> None:
-        """Alg 1 lines 14-15: n_rsrv -= req.max_tokens on finish."""
+
         self.alloc.release(self._reserved.pop(req.rid))
         self.runner.free(req)
         self.pool.remove(req)
