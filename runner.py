@@ -117,14 +117,22 @@ class PaddedRunner:
         self.kv: dict[int, RequestKV] = {}
 
     def alloc(self, req: RequestState, capacity: Optional[int] = None) -> None:
-        # `capacity` is a FlatRunner/reservation concept: a preallocated
-        # buffer extended in place. PaddedRunner rebuilds a fresh tensor
-        # from scratch every call regardless, so a fixed capacity buys
-        # nothing here -- always grow (torch.cat) the persisted per-request
-        # store instead.
+        # Rebuilding a fresh *batched* tensor every run() call is inherent
+        # to this runner and deliberately not optimized away (that copy is
+        # the point of the C1-vs-C2 contrast). But the *persisted*
+        # per-request store doesn't need to pay for that twice: honoring
+        # `capacity` here (whatever the scheduler decided, same as
+        # FlatRunner) means RequestKV.extend() writes into a preallocated
+        # buffer at a fixed offset -- O(1) per iteration -- instead of
+        # `torch.cat`-growing it -- O(current length) per iteration, i.e.
+        # O(L^2) total over a generation for no reason. That growth cost
+        # was never part of what this runner exists to demonstrate; it was
+        # just an avoidable bug from reasoning "we rebuild anyway" without
+        # separating "rebuild the batch view" from "grow the request's own
+        # history."
         self.kv[req.rid] = RequestKV(
             self.lm.n_layers, self.lm.n_kv_heads, self.lm.head_dim,
-            self.lm.device, self.lm.dtype, capacity=None)
+            self.lm.device, self.lm.dtype, capacity=capacity)
 
     @torch.inference_mode()
     def run(self, batch: list[RequestState]) -> torch.Tensor:
@@ -160,8 +168,12 @@ class PaddedRunner:
                     if p == 0:
                         continue
                     entry = self.kv[req.rid]
-                    k_layer[row, :, L_past - p:] = entry.k[li][0]
-                    v_layer[row, :, L_past - p:] = entry.v[li][0]
+                    # entry.k[li] is sized to full `capacity` under
+                    # reservation, not `entry.length` -- slice explicitly
+                    # rather than assuming the stored tensor's own shape
+                    # matches how much of it is actually committed.
+                    k_layer[row, :, L_past - p:] = entry.k[li][0, :, :p]
+                    v_layer[row, :, L_past - p:] = entry.v[li][0, :, :p]
                 past_tuples.append((k_layer, v_layer))
             past_cache = DynamicCache(ddp_cache_data=tuple(past_tuples))
 
