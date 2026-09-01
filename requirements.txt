@@ -1,0 +1,7 @@
+torch>=2.1
+# runner.py's PaddedRunner builds a DynamicCache directly from raw tensors
+# (DynamicCache(ddp_cache_data=...)) and reads back per-layer K/V via
+# cache.layers[i].keys/.values -- both are the newer Cache API generation,
+# not present in transformers 4.4x. Tested against 5.16.1.
+transformers>=5.0
+numpy>=1.26

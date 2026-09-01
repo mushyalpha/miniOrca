@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+# Generated traces and metric dumps (trace.py --out, driver.py --out)
+*.trace.json
+*.report.json
