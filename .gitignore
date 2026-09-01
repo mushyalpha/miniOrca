@@ -2,6 +2,13 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# Generated traces and metric dumps (trace.py --out, driver.py --out)
+# Generated traces and metric dumps (trace.py --out, driver.py --out,
+# run_all.py --out). These are machine/run-specific and were committed by
+# accident once (t.json) — that's what caused the recurring `git pull`
+# "untracked working tree files would be overwritten" conflicts.
 *.trace.json
 *.report.json
+t.json
+t.json.bak
+results.json
+*.results.json

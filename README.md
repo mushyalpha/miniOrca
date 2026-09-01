@@ -137,6 +137,12 @@ identical across engines is what makes the comparison fair)
 |---|---|
 | `bench_engine.py` | §6.1-style isolation of a **runner's** per-iteration cost from scheduling entirely. Fixes a homogeneous, steady-state-decode batch (no admission, no arrivals, no mixed phases) and times `runner.run(batch)` directly across batch sizes, for `single`/`flat`/`padded`. Run with `--tiny` for an offline structural comparison, or `--model Qwen/Qwen2.5-0.5B` for real numbers. This is deliberately *not* end-to-end throughput — see "What's not built yet". |
 
+### Reporting
+
+| File | What it is |
+|---|---|
+| `run_all.py` | Loads the model once, runs every requested engine back-to-back against the same `Trace` object, prints a side-by-side summary table, and writes one combined JSON report (each entry self-describing via an embedded `config`). The one-command path for producing writeup/portfolio numbers — see "Running an actual comparison" below. |
+
 ## Setup
 
 ```bash
@@ -166,8 +172,39 @@ python test_static_real.py
 
 ## Running an actual comparison
 
+### One command, one model load, every engine (recommended)
+
 ```bash
 python trace.py --out t.json -n 200 -r 4.0
+python run_all.py --trace t.json --fp32 --max-bs 8 --check-fcfs --out results.json
+```
+
+`run_all.py` loads the model exactly once, then runs `no_batch`, `static`,
+`orca`, `iter_naive`, and `iter_padded` back-to-back against the *identical*
+`Trace` object (each engine still gets fresh, independent `RequestState`s —
+`driver.run()` re-materializes them per call, so there's no cross-engine
+state leakage). It prints the same per-engine block `driver.py` does, then
+a summary table (throughput, latency p50/p99, queue delay, hold-after-
+completion, useful-fraction, ms/iter side by side), then writes one
+combined JSON — a list of reports, each with `config` embedded — to
+`--out`. That table is what you screenshot for a writeup or a post; the
+JSON is what you'd load into a notebook to plot Figure 10.
+
+Sanity-check the script itself offline first, no network or model download
+needed:
+
+```bash
+python run_all.py --tiny
+```
+
+Pick a subset with `--engines` (e.g. `--engines orca static` for just the
+headline comparison, or add `orca_no_reserve` to also see the §4.2
+deadlock — that one's *expected* to raise `KVDeadlock` at default `n_slots`
+unless you also pass a small `--n-slots`).
+
+### Or one engine at a time
+
+```bash
 python driver.py --trace t.json --engine no_batch --fp32
 python driver.py --trace t.json --engine static --max-bs 8 --fp32
 python driver.py --trace t.json --engine orca --max-bs 8 --fp32 --check-fcfs
@@ -228,10 +265,10 @@ gather/scatter cost is real and separate from the GEMM sharing both get).
 - `test_correctness.py` — formalize the ad hoc oracle checks above into one
   script that runs every registered engine over the same trace and asserts
   agreement in one place, instead of duplicated per-engine test files.
-- `run_experiments.py` — the actual sweep (`arrival_rate` × engine ×
-  `max_bs`) and a Figure-10-style plot, using the full driver + scheduler
-  (prefill included, mixed workloads, real arrival dynamics) rather than
-  `bench_engine.py`'s fixed decode-only batch.
+- A real `arrival_rate` × `max_bs` **sweep** with a Figure-10-style plot.
+  `run_all.py` gives one clean comparison at a single `(arrival_rate,
+  max_bs)` point — enough for a writeup table — but doesn't loop over a
+  grid or plot anything yet.
 - **Contiguous K/V pool + fragmentation study** — deliberately deferred, not
   forgotten. `kv_manager.py`'s `SlotAllocator` tracks a slot *count*, not
   slot *placement*; it faithfully reproduces the §4.2 admission/deadlock
