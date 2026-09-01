@@ -1,4 +1,3 @@
-"""Request state — §2 (phases), §4.2 / Algorithm 1 (state, max_tokens)."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -7,8 +6,6 @@ from typing import Optional
 
 
 class Phase(Enum):
-    """§2. INITIATION = one-shot forward over all prompt tokens.
-    INCREMENT = one token per iteration, using cached K/V."""
     INITIATION = "initiation"
     INCREMENT = "increment"
 
