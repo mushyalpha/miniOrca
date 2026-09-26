@@ -1,0 +1,42 @@
+{
+  "label": "Qwen/Qwen2.5-0.5B (cuda, torch.bfloat16)",
+  "prompt_len": 128,
+  "rows": [
+    {
+      "batch_size": 1,
+      "single_ms_per_iter": 6.687732823193073,
+      "flat_ms_per_iter": 6.934293918311596,
+      "padded_ms_per_iter": 8.61853752285242
+    },
+    {
+      "batch_size": 2,
+      "single_ms_per_iter": 13.357993625104427,
+      "flat_ms_per_iter": 8.323304951190948,
+      "padded_ms_per_iter": 9.440881162881851
+    },
+    {
+      "batch_size": 4,
+      "single_ms_per_iter": 26.707719899713993,
+      "flat_ms_per_iter": 10.401835478842258,
+      "padded_ms_per_iter": 10.777873955667019
+    },
+    {
+      "batch_size": 8,
+      "single_ms_per_iter": 53.456267453730106,
+      "flat_ms_per_iter": 14.299841932952404,
+      "padded_ms_per_iter": 13.319841176271439
+    },
+    {
+      "batch_size": 16,
+      "single_ms_per_iter": 106.46551448851824,
+      "flat_ms_per_iter": 22.536148205399513,
+      "padded_ms_per_iter": 18.23607061058283
+    },
+    {
+      "batch_size": 32,
+      "single_ms_per_iter": 214.62067380547523,
+      "flat_ms_per_iter": 38.6386476829648,
+      "padded_ms_per_iter": 28.356343805789948
+    }
+  ]
+}
