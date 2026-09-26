@@ -1,11 +1,11 @@
 # Mini-Orca
 
-A from-scratch PyTorch implementation of Orca (OSDI '22) iteration-level scheduling and selective batching.
+An implementation of Orca (OSDI '22) iteration-level scheduling and selective batching from scratch in PyTorch.
 
 ### Key Features
-* **Zero Waste** - Selective batching eliminates padding and dead-rows (100% useful compute).
-* **Readable Codebase** - Clean implementation of an LLM control plane in ~1,600 lines of Python.
-* **Optimization Suite** - 6-engine ablation framework, explicit 4D causal masking, and deadlock-free K/V slot reservation.
+* **Zero Waste** - Selective batching eliminates padding and dead rows (100% useful compute).
+* **Readable Codebase** - Clean implementation of an LLM control plane in ~1 600 lines of Python.
+* **Optimisation Suite** - 6 engine ablation framework, explicit 4D causal masking and deadlock free K/V slot reservation.
 
 ### Installation
 ```bash
